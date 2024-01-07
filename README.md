@@ -1,7 +1,9 @@
 # unifi-discover
 
-Tools to run an UDP broadcast discovery to find Unifi devices.
+Tool to discover Unifi devices in a local network. It works by sending a broadcast UDP packet to port 10001.
 
-There are two implementations:
-* one in Go: just run `go build` and `./unifi-discover --help`
-* one in Python: run `python3 unifi.py`. It requires Python3, scapy and ipaddress
+You need a recent Go toolchain.
+
+Just run `go build`, then `./unifi-discover --help`
+
+For a Python implementation see https://github.com/nitefood/python-ubnt-discovery 
