@@ -8,6 +8,7 @@ import (
 	"net"
 	"time"
 
+	"github.com/insomniacslk/xjson"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
 )
@@ -183,7 +184,7 @@ func NewDiscoveryResponse() *DiscoveryResponse {
 }
 
 type DiscoveryResponse struct {
-	MAC        net.HardwareAddr
+	MAC        xjson.HardwareAddr
 	IP         net.IP
 	Firmware   string
 	RadioName  string
