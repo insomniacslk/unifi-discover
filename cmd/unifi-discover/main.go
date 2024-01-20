@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	unifidiscover "github.com/insomniacslk/unifi-discover"
+	"github.com/insomniacslk/unifidiscover"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
 )

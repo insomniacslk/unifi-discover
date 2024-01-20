@@ -33,6 +33,9 @@ const (
 )
 
 func Discover(target string, timeout time.Duration) ([]*DiscoveryResponse, error) {
+	if target == "" {
+		target = "255.255.255.255:10001"
+	}
 	pc, err := net.ListenPacket("udp4", ":0")
 	if err != nil {
 		log.Fatalf("Failed to listen: %v", err)
