@@ -1,4 +1,4 @@
-module github.com/insomniacslk/unifi-discover
+module github.com/insomniacslk/unifidiscover
 
 go 1.21.5
 

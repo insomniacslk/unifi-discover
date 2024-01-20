@@ -1,23 +1,14 @@
-package main
+package unifidiscover
 
 import (
 	"bytes"
 	"encoding/binary"
-	"encoding/json"
 	"fmt"
 	"net"
 	"time"
 
 	"github.com/insomniacslk/xjson"
 	log "github.com/sirupsen/logrus"
-	"github.com/spf13/pflag"
-)
-
-var (
-	flagTimeout = pflag.DurationP("timeout", "t", 3*time.Second, "discovery timeout. A Go time string, e.g. `5s`")
-	flagPort    = pflag.IntP("port", "p", 10001, "Discovery UDP destiation port")
-	flagDebug   = pflag.BoolP("debug", "D", false, "Print debug logs")
-	flagJSON    = pflag.BoolP("json", "j", false, "Print JSON output")
 )
 
 var (
@@ -28,72 +19,6 @@ const (
 	// assuming ethernet MAC
 	MACLen = 6
 )
-
-func main() {
-	pflag.Parse()
-
-	if *flagDebug {
-		log.SetLevel(log.DebugLevel)
-	} else {
-		log.SetLevel(log.InfoLevel)
-	}
-	log.SetFormatter(&log.TextFormatter{
-		FullTimestamp: true,
-	})
-
-	pc, err := net.ListenPacket("udp4", ":0")
-	if err != nil {
-		log.Fatalf("Failed to listen: %v", err)
-	}
-	defer pc.Close()
-
-	addr, err := net.ResolveUDPAddr("udp4", fmt.Sprintf("255.255.255.255:%d", *flagPort))
-	if err != nil {
-		log.Fatalf("Failed to resolve UDP addr: %v", err)
-	}
-	go func() {
-		if _, err := pc.WriteTo([]byte("\x01\x00\x00\x00"), addr); err != nil {
-			log.Fatalf("Failed to send broadcast packet: %v", err)
-		}
-	}()
-
-	buf := make([]byte, 1024)
-	responses := make([]*DiscoveryResponse, 0)
-	log.Debugf("Receive timeout: %s", *flagTimeout)
-	if err := pc.SetReadDeadline(time.Now().Add(*flagTimeout)); err != nil {
-		log.Fatalf("Failed to set read timeout: %v", err)
-	}
-	for {
-		n, addr, err := pc.ReadFrom(buf)
-		if err != nil {
-			if err, ok := err.(net.Error); ok && err.Timeout() {
-				break
-			}
-			log.Fatalf("Failed to read from network: %v", err)
-		}
-		log.Debugf("%s sent %v", addr, buf[:n])
-		r, err := FromBytes(buf[:n])
-		if err != nil {
-			log.Warnf("Failed to parse discovery response: %v", err)
-		} else {
-			if r != nil {
-				responses = append(responses, r)
-			}
-		}
-	}
-
-	if *flagJSON {
-		buf, err := json.Marshal(responses)
-		if err != nil {
-			log.Fatalf("Failed to marshal to JSON: %v", err)
-		}
-		fmt.Println(string(buf))
-	} else {
-		for _, r := range responses {
-			fmt.Println(r)
-		}
-	}
-}
 
 type FieldType int
 
@@ -106,6 +31,50 @@ const (
 	FieldTypeESSID      FieldType = 0x0d
 	FieldTypeModelFull  FieldType = 0x14
 )
+
+func Discover(target string, timeout time.Duration) ([]*DiscoveryResponse, error) {
+	pc, err := net.ListenPacket("udp4", ":0")
+	if err != nil {
+		log.Fatalf("Failed to listen: %v", err)
+	}
+	defer pc.Close()
+
+	addr, err := net.ResolveUDPAddr("udp4", target)
+	if err != nil {
+		log.Fatalf("Failed to resolve UDP addr: %v", err)
+	}
+	go func() {
+		if _, err := pc.WriteTo([]byte("\x01\x00\x00\x00"), addr); err != nil {
+			log.Fatalf("Failed to send broadcast packet: %v", err)
+		}
+	}()
+
+	buf := make([]byte, 1024)
+	responses := make([]*DiscoveryResponse, 0)
+	log.Debugf("Receive timeout: %s", timeout)
+	if err := pc.SetReadDeadline(time.Now().Add(timeout)); err != nil {
+		log.Fatalf("Failed to set read timeout: %v", err)
+	}
+	for {
+		n, addr, err := pc.ReadFrom(buf)
+		if err != nil {
+			if err, ok := err.(net.Error); ok && err.Timeout() {
+				break
+			}
+			return nil, fmt.Errorf("failed to read from network: %w", err)
+		}
+		log.Debugf("%s sent %v", addr, buf[:n])
+		r, err := FromBytes(buf[:n])
+		if err != nil {
+			log.Warnf("Failed to parse discovery response: %v", err)
+		} else {
+			if r != nil {
+				responses = append(responses, r)
+			}
+		}
+	}
+	return responses, nil
+}
 
 func FromBytes(d []byte) (*DiscoveryResponse, error) {
 	if len(d) < 4 {
