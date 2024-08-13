@@ -12,7 +12,7 @@ import (
 )
 
 var (
-	DiscoveryHeader = []byte{0x01, 0x00, 0x00}
+	DiscoveryHeader = []byte{0x01, 0x00}
 )
 
 const (
@@ -80,23 +80,38 @@ func Discover(target string, timeout time.Duration) ([]*DiscoveryResponse, error
 }
 
 func FromBytes(d []byte) (*DiscoveryResponse, error) {
-	if len(d) < 4 {
-		return nil, fmt.Errorf("short buffer: want at least 4 bytes, got %d", len(d))
+	// The packet layout is
+	//
+	//  0       32       64    (variable)
+	//  +--------+--------+--------+--------+--------+--------+
+	//  |  magic | length | field1 | field2 | ....   | fieldN |
+	//  +--------+--------+--------+--------+--------+--------+
+	//
+	// Each field is as follows:
+	//
+	//  0        8       16    (variable)
+	//  +--------+--------+--------+
+	//  |  type  | length |  value |
+	//  +--------+--------+--------+
+	if len(d) < len(DiscoveryHeader) + 2 {
+		return nil, fmt.Errorf("short buffer: want at least %d bytes, got %d", len(DiscoveryHeader)+2, len(d))
 	}
 	if !bytes.Equal(d[:len(DiscoveryHeader)], DiscoveryHeader) {
 		return nil, fmt.Errorf("not a discovery response")
 	}
-	payloadLen := int(d[3])
+	payloadLen := int(binary.BigEndian.Uint16(d[2:4]))
+	//payloadLen := int(d[3])
 	if payloadLen == 0 {
 		// this is a discovery request, not a response. Not returning an error,
 		// just ignore it at the caller.
 		return nil, nil
 	}
-	if len(d)-len(DiscoveryHeader)-1 != payloadLen {
-		return nil, fmt.Errorf("invalid payload length, got %d, want %d", payloadLen, len(d)-len(DiscoveryHeader)-1)
+	// -2 includes the bytes used for the payload length field
+	if len(d)-len(DiscoveryHeader)-2 != payloadLen {
+		return nil, fmt.Errorf("invalid payload length, got %d, want %d", payloadLen, len(d)-len(DiscoveryHeader)-2)
 	}
 
-	offset := len(DiscoveryHeader) + 1
+	offset := len(DiscoveryHeader) + 2
 	resp := NewDiscoveryResponse()
 	for {
 		if offset >= len(d) {
