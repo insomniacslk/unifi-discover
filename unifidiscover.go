@@ -38,17 +38,17 @@ func Discover(target string, timeout time.Duration) ([]*DiscoveryResponse, error
 	}
 	pc, err := net.ListenPacket("udp4", ":0")
 	if err != nil {
-		log.Fatalf("Failed to listen: %v", err)
+		return nil, fmt.Errorf("failed to losten to UDP socket: %v", err)
 	}
 	defer pc.Close()
 
 	addr, err := net.ResolveUDPAddr("udp4", target)
 	if err != nil {
-		log.Fatalf("Failed to resolve UDP addr: %v", err)
+		return nil, fmt.Errorf("failed to resolve UDP addr: %v", err)
 	}
 	go func() {
 		if _, err := pc.WriteTo([]byte("\x01\x00\x00\x00"), addr); err != nil {
-			log.Fatalf("Failed to send broadcast packet: %v", err)
+			log.Warningf("unifi discover: failed to send broadcast packet: %v", err)
 		}
 	}()
 
@@ -56,7 +56,7 @@ func Discover(target string, timeout time.Duration) ([]*DiscoveryResponse, error
 	responses := make([]*DiscoveryResponse, 0)
 	log.Debugf("Receive timeout: %s", timeout)
 	if err := pc.SetReadDeadline(time.Now().Add(timeout)); err != nil {
-		log.Fatalf("Failed to set read timeout: %v", err)
+		return nil, fmt.Errorf("failed to set read timeout: %v", err)
 	}
 	for {
 		n, addr, err := pc.ReadFrom(buf)
@@ -93,7 +93,7 @@ func FromBytes(d []byte) (*DiscoveryResponse, error) {
 	//  +--------+--------+--------+
 	//  |  type  | length |  value |
 	//  +--------+--------+--------+
-	if len(d) < len(DiscoveryHeader) + 2 {
+	if len(d) < len(DiscoveryHeader)+2 {
 		return nil, fmt.Errorf("short buffer: want at least %d bytes, got %d", len(DiscoveryHeader)+2, len(d))
 	}
 	if !bytes.Equal(d[:len(DiscoveryHeader)], DiscoveryHeader) {
